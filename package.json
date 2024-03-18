@@ -15,8 +15,8 @@
   "homepage": "https://github.com/hive-engine/outpost#readme",
   "scripts": {
     "dev": "nuxt",
-    "build": "node_modules/nuxt/bin/nuxt.js build -c ./nuxt.config.js",
-    "start": "node_modules/nuxt/bin/nuxt.js start -c ./nuxt.config.js",
+    "build": "nuxt build",
+    "start": "nuxt start",
     "build:modern": "nuxt build --modern=server",
     "start:modern": "nuxt start --modern=server",
     "generate": "nuxt generate",
