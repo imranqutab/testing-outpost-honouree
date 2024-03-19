@@ -55,7 +55,7 @@ export default {
     '@/plugins/vue-timeago.js',
     '@/plugins/vue-timers.client.js',
     '@/plugins/vuelidate.js',
-    { src: '@/plugins/node-cron.js', mode: 'server'}
+    { src: '@/plugins/node-cron.js', mode: 'server' }
   ],
   components: false,
 
@@ -183,9 +183,9 @@ export default {
     HS_API_KEY: process.env.HS_API_KEY
   },
 
-  serverMiddleware: {
-    '/api/v1': '~/api'
-  },
+  serverMiddleware: [{
+    '/api/v1': '~/api', handler: '~/api/index.js', path: '/api'
+  }],
 
   render: {
     csp: {

@@ -1,209 +1,216 @@
-import express from 'express'
-import cookieParser from 'cookie-parser'
-import cookieSession from 'cookie-session'
-import axios from 'axios'
-import csurf from 'csurf'
-// import cors from 'cors'
-import { differenceInMinutes } from 'date-fns'
-import { Client, cryptoUtils, utils, Signature } from '@hiveio/dhive'
-import * as config from '../config'
-import cronblogsRouter from './cronblogs'
+// import express from 'express'
+// import cookieParser from 'cookie-parser'
+// import cookieSession from 'cookie-session'
+// import axios from 'axios'
+// import csurf from 'csurf'
+// // import cors from 'cors'
+// import { differenceInMinutes } from 'date-fns'
+// import { Client, cryptoUtils, utils, Signature } from '@hiveio/dhive'
+// import * as config from '../config'
+// import cronblogsRouter from './cronblogs'
 
-const app = express()
-const hiveClient = new Client(config.NODES)
+// const app = express()
+// const hiveClient = new Client(config.NODES)
 
-const csurfProtection = csurf({ cookie: true })
+// const csurfProtection = csurf({ cookie: true })
 
-const fetchPost = async ({ author, permlink }) => {
-  const params = {
-    token: config.TOKEN
-  }
+// const fetchPost = async ({ author, permlink }) => {
+//   const params = {
+//     token: config.TOKEN
+//   }
 
-  if (config.IS_HIVE) {
-    params.hive = 1
-  }
-  const { data } = await axios.get(`${config.SCOT_API}/@${author}/${permlink}`, {
-    params
-  })
+//   if (config.IS_HIVE) {
+//     params.hive = 1
+//   }
+//   const { data } = await axios.get(`${config.SCOT_API}/@${author}/${permlink}`, {
+//     params
+//   })
 
-  return data[config.TOKEN]
-}
-
-app.set('trust proxy', 1)
-app.use(express.json()) // Use built-in feature of Express, an alternaive to bodyParser
-app.use(cookieSession({
-  name: 'session',
-  secret: process.env.SESSION_SECRET || 'mySuperSecretSessionSecret',
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'lax',
-  maxAge: 90 * 24 * 60 * 60 * 1000
-}))
-app.use(cookieParser())
-
-// app.use(cors())
-app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000')
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-csrf-token')
-  res.setHeader('Access-Control-Allow-Credentials', 'true')
-  next()
-})
-app.use('/api/cronblogs', cronblogsRouter)
-
-app.get('/', (req, res) => {
-  res.json({
-    success: true
-  })
-})
-
-app.post('/login', csurfProtection, async (req, res) => {
-  const { username, sig, ts, smartlock } = req.body
-
-  try {
-    const [account] = await hiveClient.database.getAccounts([username])
-
-    let validSignature = false
-
-    const publicKey = Signature.fromString(sig)
-      .recover(cryptoUtils.sha256(`${username}${ts}`))
-      .toString()
-
-    const thresholdPosting = account.posting.weight_threshold
-    const authorizedAccountsPosting = new Map(account.posting.account_auths)
-
-    // Trying to validate using posting key
-    if (!validSignature) {
-      for (let i = 0; i < account.posting.key_auths.length; i += 1) {
-        const auth = account.posting.key_auths[i]
-
-        if (auth[0] === publicKey && auth[1] >= thresholdPosting) {
-          validSignature = true
-          break
-        }
-      }
-    }
-
-    // Trying to validate using posting authority
-    if (!validSignature && authorizedAccountsPosting.size > 0) {
-      let accountsData = await hiveClient.database.getAccounts(
-        Array.from(authorizedAccountsPosting.keys())
-      )
-
-      accountsData = accountsData.map(a => a.posting.key_auths[0])
-
-      for (let i = 0; i < accountsData.length; i += 1) {
-        const auth = accountsData[i]
-
-        if (auth[0] === publicKey && auth[1] >= thresholdPosting) {
-          validSignature = true
-          break
-        }
-      }
-    }
-
-    if (validSignature) {
-      req.session.user = username
-      req.session.smartlock = smartlock
-
-      return res.json({ username, smartlock })
-    }
-  } catch (e) {
-    res.json({ error: e.message }).status(500)
-  }
-
-  return res.status(401)
-})
-
-app.post('/me', (req, res) => {
-  const { user: username, smartlock } = req.session
-
-  if (username) {
-    return res.json({ username, smartlock })
-  }
-
-  return res.status(401).send('Unauthorized')
-})
-
-app.post('/logout', csurfProtection, (req, res) => {
-  req.session = null
-
-  return res.json({ status: 'ok' })
-})
-
-app.post('/search', async (req, res) => {
-  const { body: { query } } = req
-
-  try {
-    const { data } = await axios.post('https://api.hivesearcher.com/search', { q: query, sort: 'newest' }, {
-      headers: {
-        'Content-type': 'application/json',
-        Authorization: process.env.HS_API_KEY
-      }
-    })
-
-    return res.json(data)
-  } catch (e) {
-    res.status(500).send({ error: e.message })
-  }
-})
-
-app.post('/csp-violation', (req, res) => {
-  const { body: { 'csp-report': report } } = req
-
-  if (report) {
-    try {
-      const value = `${report['document-uri']} :: ${report['blocked-uri']}`
-
-      console.log(`CSP Violation: ${value} UA: ${req.headers['user-agent']}`)
-    } catch {
-      //
-    }
-  }
-
-  return res.send('')
-})
-
-app.get('/curated', async (req, res) => {
-  let { from, limit } = req.query
-  let posts = []
-
-  from = Number(from) || -1
-
-  if (!limit || limit <= 0) {
-    limit = 50
-  }
-
-  try {
-    posts = await hiveClient.database.getAccountHistory(config.CURATED_FEED_ACCOUNT, from, limit, utils.makeBitMaskFilter([utils.operationOrders.vote]))
-
-    from = posts[0][0]
-
-    posts.reverse()
-
-    posts = posts.filter(p => p[1].op[1].weight > 0)
-      .map((r) => {
-        const { author, permlink } = r[1].op[1]
-
-        return fetchPost({ author, permlink })
-      })
-
-    posts = await Promise.all(posts)
-
-    posts = posts.filter(p => p && p.main_post).map(p => ({ ...p, permlink: p.authorperm.split('/')[1], next_history_index: from - 1 }))
-  } catch (error) {
-    console.log(error.message)
-  }
-
-  return res.json(posts)
-})
-
-module.exports = app
-
-// if (require.main === module) {
-const port = process.env.PORT || 3001
-
-app.listen(port, () => {
-  // eslint-disable-next-line no-console
-  console.log(`API server listening on port ${port}`)
-})
+//   return data[config.TOKEN]
 // }
+
+// app.set('trust proxy', 1)
+// app.use(express.json()) // Use built-in feature of Express, an alternaive to bodyParser
+// app.use(cookieSession({
+//   name: 'session',
+//   secret: process.env.SESSION_SECRET || 'mySuperSecretSessionSecret',
+//   secure: process.env.NODE_ENV === 'production',
+//   sameSite: 'lax',
+//   maxAge: 90 * 24 * 60 * 60 * 1000
+// }))
+// app.use(cookieParser())
+
+// // app.use(cors())
+// app.use((req, res, next) => {
+//   res.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000')
+//   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE')
+//   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-csrf-token')
+//   res.setHeader('Access-Control-Allow-Credentials', 'true')
+//   next()
+// })
+// app.use('/api/cronblogs', cronblogsRouter)
+
+// app.get('/', (req, res) => {
+//   res.json({
+//     success: true
+//   })
+// })
+
+// app.post('/login', csurfProtection, async (req, res) => {
+//   const { username, sig, ts, smartlock } = req.body
+
+//   try {
+//     const [account] = await hiveClient.database.getAccounts([username])
+
+//     let validSignature = false
+
+//     const publicKey = Signature.fromString(sig)
+//       .recover(cryptoUtils.sha256(`${username}${ts}`))
+//       .toString()
+
+//     const thresholdPosting = account.posting.weight_threshold
+//     const authorizedAccountsPosting = new Map(account.posting.account_auths)
+
+//     // Trying to validate using posting key
+//     if (!validSignature) {
+//       for (let i = 0; i < account.posting.key_auths.length; i += 1) {
+//         const auth = account.posting.key_auths[i]
+
+//         if (auth[0] === publicKey && auth[1] >= thresholdPosting) {
+//           validSignature = true
+//           break
+//         }
+//       }
+//     }
+
+//     // Trying to validate using posting authority
+//     if (!validSignature && authorizedAccountsPosting.size > 0) {
+//       let accountsData = await hiveClient.database.getAccounts(
+//         Array.from(authorizedAccountsPosting.keys())
+//       )
+
+//       accountsData = accountsData.map(a => a.posting.key_auths[0])
+
+//       for (let i = 0; i < accountsData.length; i += 1) {
+//         const auth = accountsData[i]
+
+//         if (auth[0] === publicKey && auth[1] >= thresholdPosting) {
+//           validSignature = true
+//           break
+//         }
+//       }
+//     }
+
+//     if (validSignature) {
+//       req.session.user = username
+//       req.session.smartlock = smartlock
+
+//       return res.json({ username, smartlock })
+//     }
+//   } catch (e) {
+//     res.json({ error: e.message }).status(500)
+//   }
+
+//   return res.status(401)
+// })
+
+// app.post('/me', (req, res) => {
+//   const { user: username, smartlock } = req.session
+
+//   if (username) {
+//     return res.json({ username, smartlock })
+//   }
+
+//   return res.status(401).send('Unauthorized')
+// })
+
+// app.post('/logout', csurfProtection, (req, res) => {
+//   req.session = null
+
+//   return res.json({ status: 'ok' })
+// })
+
+// app.post('/search', async (req, res) => {
+//   const { body: { query } } = req
+
+//   try {
+//     const { data } = await axios.post('https://api.hivesearcher.com/search', { q: query, sort: 'newest' }, {
+//       headers: {
+//         'Content-type': 'application/json',
+//         Authorization: process.env.HS_API_KEY
+//       }
+//     })
+
+//     return res.json(data)
+//   } catch (e) {
+//     res.status(500).send({ error: e.message })
+//   }
+// })
+
+// app.post('/csp-violation', (req, res) => {
+//   const { body: { 'csp-report': report } } = req
+
+//   if (report) {
+//     try {
+//       const value = `${report['document-uri']} :: ${report['blocked-uri']}`
+
+//       console.log(`CSP Violation: ${value} UA: ${req.headers['user-agent']}`)
+//     } catch {
+//       //
+//     }
+//   }
+
+//   return res.send('')
+// })
+
+// app.get('/curated', async (req, res) => {
+//   let { from, limit } = req.query
+//   let posts = []
+
+//   from = Number(from) || -1
+
+//   if (!limit || limit <= 0) {
+//     limit = 50
+//   }
+
+//   try {
+//     posts = await hiveClient.database.getAccountHistory(config.CURATED_FEED_ACCOUNT, from, limit, utils.makeBitMaskFilter([utils.operationOrders.vote]))
+
+//     from = posts[0][0]
+
+//     posts.reverse()
+
+//     posts = posts.filter(p => p[1].op[1].weight > 0)
+//       .map((r) => {
+//         const { author, permlink } = r[1].op[1]
+
+//         return fetchPost({ author, permlink })
+//       })
+
+//     posts = await Promise.all(posts)
+
+//     posts = posts.filter(p => p && p.main_post).map(p => ({ ...p, permlink: p.authorperm.split('/')[1], next_history_index: from - 1 }))
+//   } catch (error) {
+//     console.log(error.message)
+//   }
+
+//   return res.json(posts)
+// })
+
+// module.exports = app
+
+// // if (require.main === module) {
+// const port = process.env.PORT || 3001
+
+// app.listen(port, () => {
+//   // eslint-disable-next-line no-console
+//   console.log(`API server listening on port ${port}`)
+// })
+// }
+export default function (req, res) {
+  // Set Content-Type header to application/json
+  res.setHeader('Content-Type', 'application/json')
+
+  // Send JSON response
+  res.end(JSON.stringify({ message: 'Hello from the API!' }))
+}
