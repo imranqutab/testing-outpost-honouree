@@ -241,7 +241,7 @@ export default {
           'https://api.marketplace.tribaldex.com',
           'https://hcaptcha.com',
           'https://*.hcaptcha.com',
-          'http://localhost:8080',
+          'http://localhost:3000',
           config.OUTPOST_ONBOARD_API,
           ...config.NODES
         ],
@@ -293,7 +293,7 @@ export default {
   },
 
   server: {
-    port: 8080,
+    port: 3000,
     host: process.env.NODE_ENV === 'production' ? '0.0.0.0' : 'localhost'
   },
 

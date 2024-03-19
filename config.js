@@ -3,7 +3,7 @@ import { version } from './package.json'
 export const TOKEN = 'HON'
 export const IS_HIVE = true
 export const APP_DOMAIN = 'https://honouree.com'
-export const DEV_DOMAIN = 'http://localhost:8080'
+export const DEV_DOMAIN = 'http://localhost:3000'
 export const DEV_API = 'http://localhost:3001'
 export const APP_TITLE = 'Honouree'
 export const APP = `honouree/${version}`

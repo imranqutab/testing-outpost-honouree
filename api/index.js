@@ -7,7 +7,7 @@ import csurf from 'csurf'
 import { differenceInMinutes } from 'date-fns'
 import { Client, cryptoUtils, utils, Signature } from '@hiveio/dhive'
 import * as config from '../config'
-import cronblogsRouter from './cronblogs';
+import cronblogsRouter from './cronblogs'
 
 const app = express()
 const hiveClient = new Client(config.NODES)
@@ -29,8 +29,8 @@ const fetchPost = async ({ author, permlink }) => {
   return data[config.TOKEN]
 }
 
-app.set('trust proxy', 1);
-app.use(express.json());  // Use built-in feature of Express, an alternaive to bodyParser
+app.set('trust proxy', 1)
+app.use(express.json()) // Use built-in feature of Express, an alternaive to bodyParser
 app.use(cookieSession({
   name: 'session',
   secret: process.env.SESSION_SECRET || 'mySuperSecretSessionSecret',
@@ -42,13 +42,13 @@ app.use(cookieParser())
 
 // app.use(cors())
 app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', 'http://localhost:8080');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-csrf-token');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  next();
-});
-app.use('/api/cronblogs', cronblogsRouter);
+  res.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000')
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-csrf-token')
+  res.setHeader('Access-Control-Allow-Credentials', 'true')
+  next()
+})
+app.use('/api/cronblogs', cronblogsRouter)
 
 app.get('/', (req, res) => {
   res.json({
@@ -200,10 +200,10 @@ app.get('/curated', async (req, res) => {
 module.exports = app
 
 // if (require.main === module) {
-  const port = process.env.PORT || 3001
+const port = process.env.PORT || 3001
 
-  app.listen(port, () => {
-    // eslint-disable-next-line no-console
-    console.log(`API server listening on port ${port}`)
-  })
+app.listen(port, () => {
+  // eslint-disable-next-line no-console
+  console.log(`API server listening on port ${port}`)
+})
 // }
