@@ -272,7 +272,7 @@ export default {
           autoFetch: false
         },
         endpoints: {
-          login: { url: '/login', method: 'post' },
+          login: { url: '/api/v1/login', method: 'post' },
           logout: { url: '/api/v1/logout', method: 'post' },
           user: { url: '/api/v1/me', method: 'post' },
           csrf: false
@@ -293,8 +293,8 @@ export default {
   },
 
   server: {
-    port: 3000,
-    host: process.env.NODE_ENV === 'production' ? '0.0.0.0' : '0.0.0.0'
+    port: 8080,
+    host: process.env.NODE_ENV === 'production' ? '13.212.183.88' : 'localhost'
   },
 
   router: {
