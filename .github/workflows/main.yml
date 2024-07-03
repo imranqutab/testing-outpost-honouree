@@ -14,6 +14,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '14.14.0'
+
       # Install dependencies and build (if applicable)
       - name: Install Dependencies and Build
         run: |
