@@ -19,7 +19,7 @@ jobs:
         run: |
           npm install
           # Add any build commands if your project requires it
-          npm run build
+          npm run build --modern
 
       # Deploy to EC2 instance
       - name: Deploy to EC2
